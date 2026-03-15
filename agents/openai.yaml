@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conversation History Recovery"
+  short_description: "Read prior Codex and Claude history plus git evidence, find missed requirements, and fix validated gaps"
+  default_prompt: "Use $conversation-history-recovery-skill to analyze the last conversations for this repo across Codex, Claude, repo-local notes, and recent commits, identify missed or partially addressed user requirements, verify the current implementation, and fix the highest-confidence gaps immediately."
