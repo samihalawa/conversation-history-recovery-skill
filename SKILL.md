@@ -1,27 +1,47 @@
 ---
 name: conversation-history-recovery-skill
-description: "Audit the real prior conversations for the current repo across Codex, Claude, repo-local exports, and recent git history; identify missed user requirements, partial implementations, and unresolved work; then implement the highest-confidence fixes immediately. Use when the user asks what was promised but not finished, wants lost context recovered, or wants prior agent work critically continued instead of summarized."
+description: "Perform a forensic reconstruction of prior repo conversations across Codex, Claude, repo-local exports, and git history; ingest each conversation in detail, identify explicit and implicit problems, diagnose agent failures, and either return a structured analytical report or implement the highest-confidence fixes when the user asks for execution."
 ---
 
 # Conversation History Recovery Skill
 
-Use this skill when the user wants the agent to reconstruct what really happened across prior conversations and commits, then close the gaps in the current repo instead of stopping at a report.
+Use this skill when the user wants the agent to reconstruct what really happened across prior conversations and commits, identify what was missed, and either:
+
+1. deliver a deep forensic analysis report, or
+2. continue the work by fixing validated gaps in the current repo.
+
+Do not collapse this into a lightweight summary. The goal is high-fidelity reconstruction, not fast hand-waving.
+
+## Mode Selection
+
+Choose the mode from the user's wording before you touch code:
+
+- `forensic-analysis mode`
+  - Use when the user asks for analysis, diagnosis, root-cause review, missed-context recovery, critique, or a report.
+  - Stay text-only. Do not write code. Do not claim fixes.
+- `recovery-execution mode`
+  - Use when the user wants the same forensic history work, then wants the repo continued or fixed.
+  - Run the forensic analysis first, then verify the current repo, then implement only the highest-confidence validated gaps.
+
+If the user is ambiguous, prefer `recovery-execution mode` only when the wording clearly asks to continue or fix. Otherwise default to `forensic-analysis mode`.
 
 ## Hard Rules
 
 - Read real local history, not memory or summaries alone.
 - Default to the last 20 relevant conversations unless the user specifies a different window.
-- Read every message in each selected conversation sequentially. Do not skip to summaries.
-- Inspect the first few lines of each source format before batch reading so you know the actual JSONL schema.
-- Never say a conversation or file was "fully read" unless you consumed 100 percent of the selected source. If you sampled, say so explicitly.
-- Prove source access on one real sample file per source before launching broad analysis or subagents.
-- Prefer direct local reads of the real source files over temporary tool-output files or sandbox-exported summaries.
-- Focus on user feature requirements, constraints, corrections, and partial work.
-- Ignore deployment chatter, agent self-critique, and tool noise unless they directly affect missing functionality.
-- Verify whether each claimed feature is already implemented before calling it missing.
-- Extraction scripts may help index or shortlist sources, but final judgments must still come from direct sequential reads of the original conversation files.
+- Read every selected conversation sequentially before making final judgments.
+- Inspect the first lines of each source format before batch reading so you know the actual JSONL schema.
+- Never say a conversation or file was fully read unless you consumed 100 percent of the selected source. If you sampled, say so explicitly.
+- Prove source access on one real sample file per source before broad analysis.
+- Prefer direct local reads of original files over temporary exports, cached summaries, or secondary notes.
+- Treat prior summaries, audits, continuation notes, and agent self-reports as leads, not truth.
+- Final conclusions must come from the original conversation text plus current repo evidence.
+- Separate user problems from agent-created problems. Both matter.
+- Track contradictions, abandoned work, unverified claims, and repeated re-requests explicitly.
+- When a request is typo-heavy or voice-to-text distorted, preserve the raw wording and also normalize it into plain language.
+- In `forensic-analysis mode`, never write code.
+- In `recovery-execution mode`, never start editing until the analytical backlog has been verified against the current repo.
 - Do not let subagents summarize files they cannot directly access or fully read.
-- Fix validated gaps immediately when safe; do not stop at critique.
 
 ## Source Order
 
@@ -44,43 +64,59 @@ Use this skill when the user wants the agent to reconstruct what really happened
    - `git log --oneline --decorate -20`
    - inspect touched files for commits that appear to claim relevant work
 
-## Workflow
+## Forensic Workflow
 
-### 1. Build The Evidence Ledger
+### Phase 0. Scope, Mode, And Evidence Ledger
 
-- List the selected conversation files, commit range, and repo-local notes you will use.
-- Keep the ledger chronological and source-labeled: `codex`, `claude`, `repo-doc`, `git`.
-- Record coverage for each source: selected file, read method, and whether coverage was full or partial.
+- State which mode you are using: `forensic-analysis` or `recovery-execution`.
+- Build an evidence ledger before deep analysis.
+- List selected conversation files, repo-local notes, and git ranges in chronological order.
+- Label each source as `codex`, `claude`, `repo-doc`, or `git`.
+- Record for each source:
+  - file or commit identifier
+  - why it was selected
+  - planned read method
+  - full vs partial coverage target
 
-### 1.5. Validate Access And Chunking Early
+### Phase 1. Forensic Context Ingestion And Metadata Reporting
 
-- Open one small real file from each source first and confirm the format is readable.
-- If a file is too large, read it in stable sequential chunks from the original path and track progress.
-- Do not switch to a different derived file or temporary export unless the original source is unavailable, and note that downgrade explicitly.
+- Open one real sample file from each source first and confirm the format is readable.
+- If a file is large, read it in stable sequential chunks from the original path and track progress.
 - If tooling blocks direct reading, report that blocker instead of pretending the source was covered.
-- If the repo has a large session count, use a two-pass approach:
-  - pass 1: lightweight session metadata, cwd confirmation, timestamps, and candidate user asks
-  - pass 2: full sequential reads for the sessions that appear unresolved, contradictory, or high impact
+- Perform both:
+  - `micro-analysis`: every message one by one in chronological order
+  - `macro-analysis`: re-read the same material in thematic blocks after the first pass
+- Report quantitative metadata for the selected scope:
+  - total selected conversations
+  - total messages
+  - approximate word count
+  - approximate character count
+  - key conversation blocks or phases by theme
+- If the repo has many sessions, use a two-pass process:
+  - pass 1: metadata, timestamps, cwd confirmation, candidate asks, repeated frustration signals
+  - pass 2: full sequential reads of the unresolved, contradictory, or high-impact sessions
 
-### 2. Analyze Conversations One By One
+### Phase 2. Detailed Conversation Analysis
 
-For every user message extract:
+For every user message, extract:
 
+- raw request wording when nuance matters
+- normalized plain-language restatement
 - explicit request
 - implicit intent
 - constraints and preferences
-- important examples, files, links, screenshots, or DB details
-- corrections or frustration signals
-- the exact wording when a typo-heavy request could change meaning
-- a normalized plain-language restatement when the original message is typo-heavy or voice-to-text distorted
+- named files, routes, commands, screenshots, repos, databases, or links
+- corrections, escalations, and frustration signals
+- success criteria the user was implicitly using
 
-For every assistant message diagnose:
+For every assistant message, diagnose:
 
 - what was actually done
-- what was assumed without proof
-- what remained partial, skipped, or contradicted later
-- whether verification was real or only claimed
-- whether the assistant relied on a condensed extractor instead of the primary source
+- what was only promised
+- what assumptions were made without proof
+- what evidence was cited and whether it was real
+- what remained partial, skipped, contradicted later, or abandoned
+- whether the assistant relied on a condensed summary instead of the primary source
 
 Tag each turn:
 
@@ -92,65 +128,150 @@ Tag each turn:
 
 Escalation rule:
 
-- If an agent claimed an item was complete and the user later re-requested the same issue, classify that earlier claim as `[FAIL]`, not `[PARTIAL]`.
+- If an agent claimed an item was complete and the user later re-requested the same issue, classify the earlier claim as `[FAIL]`, not `[PARTIAL]`.
 
-### 3. Build The Unresolved Backlog
+### Phase 3. Comprehensive Problem Identification
 
-- Deduplicate repeated asks across all sources.
-- Group repeated asks by functional area such as route, component, service, table, or workflow, not by wording alone.
-- Separate:
-  - missing feature
-  - partial implementation
-  - regression risk
-  - unverified claim
-  - forgotten constraint
-- Map each backlog item to real files, routes, services, tables, env vars, or commit(s).
-- Distinguish clearly between:
-  - user-requested but not implemented
-  - implemented but unverified
-  - agent-reported summaries that were never proven from source
+Build a problem inventory with separate sections for:
 
-### 4. Verify The Current Repo State
+- explicit user problems
+  - bugs
+  - broken flows
+  - UX frustrations
+  - errors
+- agent-driven frustrations
+  - ignored feedback
+  - false completion claims
+  - contradiction between messages
+  - misread instructions
+  - repeated plan-without-execution loops
+- implicit problems
+  - unreported failures
+  - abandoned tasks
+  - repeated re-requests
+  - forgotten constraints
+  - incompatible edits across parallel work
 
-Before editing, inspect the actual code and runtime entry points that control each backlog item.
+For each problem, capture:
 
-At minimum verify:
+- source conversations or commits
+- earliest appearance
+- latest appearance
+- whether it was ever truly resolved
+- current confidence level based on source evidence
+
+### Phase 4. Macro Re-Read And Root Cause Analysis
+
+Re-read the conversation set by theme, not just chronology.
+
+Recommended themes:
+
+- repo orientation and setup
+- debugging and verification
+- UI or product asks
+- infrastructure or deployment
+- data and database work
+- agent behavior and trust failures
+
+For each theme, answer:
+
+- what the user consistently wanted
+- where the agent drifted
+- which constraints were lost
+- whether the repo state ever caught up with the conversation claims
+- what the root causes were
+
+Root-cause buckets to consider:
+
+- shallow ingestion
+- skipped primary sources
+- instruction loss
+- verification theater
+- scope drift
+- contradictory multi-agent work
+- implementation without repo validation
+- summary-trusting instead of source-reading
+
+### Phase 5. Current Repo Verification
+
+Only perform this phase in `recovery-execution mode`.
+
+Before editing, verify the current code for each backlog item by inspecting:
 
 - affected routes and components
 - server handlers and services
 - schema or DB access points when data is involved
-- auth, validation, analytics, and mobile or responsive side effects
-- current dirty worktree so you do not overwrite someone else's work
-- overlapping session timestamps or parallel-agent edits that may have produced contradictory implementations
-- actual diffs or current code for commits that claim relevant work, because commit messages alone are not proof
+- auth, validation, analytics, and responsive side effects
+- current dirty worktree so you do not overwrite unrelated changes
+- overlapping session timestamps or parallel-agent edits that may have produced contradictions
+- actual diffs or current code for commits that claimed relevant work
 
-### 5. Implement The Highest-Confidence Gaps Now
+Distinguish clearly between:
+
+- user-requested but not implemented
+- implemented but unverified
+- agent-reported summaries that were never proven from source
+- already fixed in current code and should not be reopened
+
+### Phase 6. Implement Highest-Confidence Gaps
+
+Only perform this phase in `recovery-execution mode`.
 
 - Prefer direct fixes over long reports.
-- Reuse the repo's existing patterns.
-- Do not revert unrelated user changes.
+- Reuse repo patterns.
+- Do not revert unrelated user work.
 - If multiple gaps are independent, handle the most user-critical ones first.
 - If blocked, state the exact blocker and the evidence.
 
-### 6. Verify After Changes
+### Phase 7. Self-Validation
 
-Use the fastest real verification that fits the change:
+Before returning results, verify the analysis itself.
 
-- targeted tests or typecheck
-- grep and route checks
-- runtime logs
-- browser or visual validation when UI changed
-- DB reads when data behavior changed
+Checklist:
 
-### 7. Return A Compact Recovery Report
+- Did you confirm access to each claimed source type?
+- Did you read each selected conversation sequentially?
+- Did you separately perform micro-analysis and macro-analysis?
+- Did you report counts and key thematic blocks?
+- Did you distinguish explicit, agent-driven, and implicit problems?
+- Did you tie conclusions to source evidence instead of intuition?
+- In `recovery-execution mode`, did you verify the current repo before editing?
+- Did you avoid claiming completeness where coverage was partial?
 
-Unless the user asks for a different format, return:
+If any answer is no, say so explicitly and narrow your claims.
 
-1. timeline of what the user asked and what changed
-2. unresolved or partially addressed items still relevant now
-3. what you implemented in this turn
-4. verification evidence
-5. remaining blockers or follow-ups
+## Output Format
+
+Unless the user requests a different shape, return the report in this order:
+
+1. `Forensic Analysis & Context Ingestion`
+   - sources read
+   - coverage quality
+   - message, word, and character counts
+   - key conversation blocks
+2. `Analysis Summary`
+   - concise reconstruction of what happened
+3. `Problem Inventory`
+   - explicit user problems
+   - agent-driven frustrations
+   - implicit problems
+4. `Root Cause Analysis`
+   - grouped by theme and failure mode
+5. `Critique of Agent Behavior`
+   - where the agent lost context, over-claimed, skipped validation, or ignored corrections
+6. `Strategic Recommendations`
+   - what the next agent should do differently
+   - what evidence to gather first
+   - what not to trust without verification
+7. `Success Criteria`
+   - what would have to be true to consider the recovery complete
+
+In `recovery-execution mode`, append:
+
+8. `Current Repo Verification`
+9. `Implemented In This Turn`
+10. `Verification Evidence`
+11. `Remaining Blockers Or Follow-Ups`
 
 ## Decision Standard
 
@@ -160,6 +281,7 @@ Treat an item as unresolved only if at least one of these is true:
 - the code partially implements it but misses explicit user details
 - the assistant claimed completion without verification
 - a later conversation shows the user had to restate or correct it
+- the source text shows silent abandonment or contradiction
 
 Do not reopen items that are already implemented and verified in the current repo unless there is evidence of regression.
 

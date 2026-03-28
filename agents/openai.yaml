@@ -1,4 +1,4 @@
 interface:
   display_name: "Conversation History Recovery"
-  short_description: "Read prior Codex and Claude history plus git evidence, find missed requirements, and fix validated gaps"
-  default_prompt: "Use $conversation-history-recovery-skill to analyze the last conversations for this repo across Codex, Claude, repo-local notes, and recent commits, identify missed or partially addressed user requirements, verify the current implementation, and fix the highest-confidence gaps immediately."
+  short_description: "Run a forensic conversation reconstruction, diagnose missed requirements and agent failures, then report or fix validated gaps"
+  default_prompt: "Use $conversation-history-recovery-skill to perform a forensic reconstruction of this repo's Codex, Claude, repo-local, and git history. Read the selected conversations sequentially, do both micro-analysis and thematic macro-analysis, identify explicit user problems, agent-driven failures, and implicit unresolved issues, then either return the structured forensic report or, if the user asked for execution, verify the current repo and fix the highest-confidence gaps."
