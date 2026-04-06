@@ -25,7 +25,27 @@ Choose the mode from the user's wording before you touch code:
 
 If the user is ambiguous, prefer `recovery-execution mode` only when the wording clearly asks to continue or fix. Otherwise default to `forensic-analysis mode`.
 
+## Core Priority Rule
+
+- Highest priority source is the current conversation in the active thread.
+- Use it as the binding interpretation when historical sources disagree.
+- If the current conversation explicitly asks for a previous agent/tool name (for example Claude Desktop, Claude/Copilot workspaces, Kimi, or coworkers), include those sources when discoverable and mark any missing sources explicitly.
+- If the user repeats a request after a prior completion claim, classify that prior claim as suspicious and continue forensic recovery instead of trusting it.
+
 ## Hard Rules
+
+## Blocker Handling
+
+When blocked, do not stop. Emit these exact tags before proceeding:
+
+- `<ANALYZING BLOCKER AND HOW TO ADDRESS IT!!!>`
+- `<ANALYZING USER INTENTIONS AND BEING AS USEFUL AS POSSIBLE!!!>`
+
+Then continue by:
+
+- checking available local source paths and permissions,
+- checking prior successful workflows in local histories,
+- and re-aligning to the current conversation constraints before retrying.
 
 - Read real local history, not memory or summaries alone.
 - Default to the last 20 relevant conversations unless the user specifies a different window.
@@ -45,22 +65,24 @@ If the user is ambiguous, prefer `recovery-execution mode` only when the wording
 
 ## Source Order
 
-1. Current repo context:
+1. Active conversation context (current user request and latest turns).
+2. Current repo context:
    - `tree -I node_modules -L 2`
    - `AGENTS.md`, `README.md`, `package.json`
    - relevant router, schema, config, and feature entry-point files
    - dirty worktree and recent commits
-2. Codex history for the current repo:
+3. Codex history for the current repo:
    - filter `~/.codex/sessions/**/*.jsonl` by the current repo `cwd`
    - the repo `cwd` is typically stored in `session_meta.payload.cwd` or `turn_context.payload.cwd`, not as a top-level field
    - take the most recent 20 matching sessions unless the user asks for another range
-3. Claude history for the current repo:
+4. Claude and adjacent assistant histories for the current repo:
    - derive the project folder from `cwd` by replacing `/` with `-` and keeping the leading `-`
    - read recent `~/.claude/projects/<derived-project>/*.jsonl`
-4. Repo-local exported conversation files and notes:
+   - discover and read other local assistant artifacts if present (`Claude`, `copilot`, `kimi`, or other local tools) before concluding source scope.
+5. Repo-local exported conversation files and notes:
    - `docs/codex-messages*`
    - issue, report, critique, and analysis files only when they are clearly about the same feature area
-5. Git history:
+6. Git history:
    - `git log --oneline --decorate -20`
    - inspect touched files for commits that appear to claim relevant work
 
@@ -69,14 +91,24 @@ If the user is ambiguous, prefer `recovery-execution mode` only when the wording
 ### Phase 0. Scope, Mode, And Evidence Ledger
 
 - State which mode you are using: `forensic-analysis` or `recovery-execution`.
-- Build an evidence ledger before deep analysis.
+- Build an evidence ledger before deep analysis:
+  - total commits analyzed
+  - total conversation files found
+  - total repo documents inspected
+  - churn-heavy files or recurring edit files
 - List selected conversation files, repo-local notes, and git ranges in chronological order.
+- For each source, report full versus partial coverage.
 - Label each source as `codex`, `claude`, `repo-doc`, or `git`.
 - Record for each source:
   - file or commit identifier
   - why it was selected
   - planned read method
   - full vs partial coverage target
+
+For full forensic requests, run these checks before phase 1:
+- `git log --oneline --since="4 weeks ago" --all`
+- inventory conversation sources in `~/.codex/sessions/**/*.jsonl` and `~/.claude/projects/*/*.jsonl` linked to the repo cwd
+- list recent docs with explicit status words (`done`, `fixed`, `complete`) for verification
 
 ### Phase 1. Forensic Context Ingestion And Metadata Reporting
 
@@ -130,6 +162,12 @@ Escalation rule:
 
 - If an agent claimed an item was complete and the user later re-requested the same issue, classify the earlier claim as `[FAIL]`, not `[PARTIAL]`.
 
+For each user message, track confidence:
+
+- high: clear request with explicit constraints
+- medium: interpretable but fragmented
+- low: heavy typo-heavy/noise, requires careful source stitching
+
 ### Phase 3. Comprehensive Problem Identification
 
 Build a problem inventory with separate sections for:
@@ -159,6 +197,13 @@ For each problem, capture:
 - latest appearance
 - whether it was ever truly resolved
 - current confidence level based on source evidence
+
+Add a separate `Regression Register` subsection with:
+
+- Re-opened requests after a prior `[OK]` or `[DONE]`-style claim
+- Recurring completion mismatches
+- Evidence that changed features were reintroduced without evidence
+- Agent-created degradations after verified fix points
 
 ### Phase 4. Macro Re-Read And Root Cause Analysis
 
@@ -191,6 +236,9 @@ Root-cause buckets to consider:
 - contradictory multi-agent work
 - implementation without repo validation
 - summary-trusting instead of source-reading
+- feature removed then reintroduced after confirmation
+- contradictory commit chains without repo-verified justification
+- regressions caused by later agent edits in same files
 
 ### Phase 5. Current Repo Verification
 
@@ -272,6 +320,10 @@ In `recovery-execution mode`, append:
 9. `Implemented In This Turn`
 10. `Verification Evidence`
 11. `Remaining Blockers Or Follow-Ups`
+
+In high-noise or repeatedly failed threads, also include:
+
+12. `Regression Register`
 
 ## Decision Standard
 
