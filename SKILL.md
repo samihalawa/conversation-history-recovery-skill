@@ -78,7 +78,18 @@ Then continue by:
 4. Claude and adjacent assistant histories for the current repo:
    - derive the project folder from `cwd` by replacing `/` with `-` and keeping the leading `-`
    - read recent `~/.claude/projects/<derived-project>/*.jsonl`
-   - discover and read other local assistant artifacts if present (`Claude`, `copilot`, `kimi`, or other local tools) before concluding source scope.
+   - discover and read other local assistant artifacts if present (`Claude`, `copilot`, `kimi`, `cursor`, `trae`, `agent` variants) before concluding source scope.
+   - preferred additional search order:
+     - `~/.copilot/session-state/*.jsonl`
+     - `~/.copilot/logs/*.log`
+     - `~/.auto-claude/memories/*`
+     - `~/.kimi` and `~/Library/Application Support/KimiCode`
+     - `~/.claude-worktrees`
+     - `~/.claude-profiles`
+     - `~/.cursor` and `~/.vscode-server/extensions/github.copilot-*` (session metadata only when available)
+   - if any source is missing, record it explicitly in coverage as `missing-source`
+   - if multiple worktree-style sources exist, include `~/.claude/worktrees` and project-family worktree directories that match the current repo basename
+   - never claim a full coverage score unless the same source family was fully consumed or explicitly sampled with a partial flag
 5. Repo-local exported conversation files and notes:
    - `docs/codex-messages*`
    - issue, report, critique, and analysis files only when they are clearly about the same feature area
@@ -161,6 +172,15 @@ Tag each turn:
 Escalation rule:
 
 - If an agent claimed an item was complete and the user later re-requested the same issue, classify the earlier claim as `[FAIL]`, not `[PARTIAL]`.
+
+Regression signals to flag explicitly in the report:
+
+- user says the same issue again after a prior `[OK]`/`DONE`-style signal
+- assistant claims a fix without evidence, then user reports repeat failure
+- a prior fix is contradicted by newer assistant edits in the same file/function
+- source scope was intentionally narrowed and then later expanded without revalidation
+
+Any observed regression signal belongs in `Regression Register` with evidence links and timestamps.
 
 For each user message, track confidence:
 
