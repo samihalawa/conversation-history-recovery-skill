@@ -1,6 +1,6 @@
 ---
 name: conversation-history-recovery-skill
-description: "Perform a forensic reconstruction of prior repo conversations across Codex, Claude, repo-local exports, and git history; ingest each conversation in detail, identify explicit and implicit problems, diagnose agent failures, and either return a structured analytical report or implement the highest-confidence fixes when the user asks for execution."
+description: "Perform a forensic reconstruction of prior repo conversations across Codex, Claude, clipboard history, Notion workspace history, repo-local exports, and git history; ingest each conversation in detail, identify explicit and implicit problems, diagnose agent failures, and either return a structured analytical report or implement the highest-confidence fixes when the user asks for execution."
 ---
 
 # Conversation History Recovery Skill
@@ -90,10 +90,24 @@ Then continue by:
    - if any source is missing, record it explicitly in coverage as `missing-source`
    - if multiple worktree-style sources exist, include `~/.claude/worktrees` and project-family worktree directories that match the current repo basename
    - never claim a full coverage score unless the same source family was fully consumed or explicitly sampled with a partial flag
-5. Repo-local exported conversation files and notes:
+5. Clipboard history:
+   - inspect local clipboard stores first when the task mentions copied prompts, repeated UI text, or prior agent work that may have been pasted instead of written.
+   - preferred sources:
+     - `~/Library/Containers/com.fiplab.clipboard/Data/Library/Application Support/CopyClip/copyclip.sqlite`
+     - `~/Library/Application Support/VeloxClip/veloxclip.db`
+     - plaintext or backup exports under `~/Library/Mobile Documents/com~apple~CloudDocs/git_backup/`
+   - inspect the SQLite schema first, then query `content`, `summary`, `sourceApp`, `createdAt`, `ZCONTENTS`, `ZDISPLAYNAME`, and `ZDATERECORDED`.
+   - search by source app, date window, and theme keywords; dedupe near-identical clips; rank by recency and theme density.
+6. Notion workspace and connected sources:
+   - use the existing Notion connector first for `_search`, `_fetch`, comments, users, and teamspaces.
+   - when the user asks for "new pages" or recent workspace changes, filter by `created_date_range`, teamspace, or creator and fetch the returned pages/databases.
+   - if the connector cannot reach the exact scope, use `curl` against the Notion API with active integration credentials to search and list recent pages/databases/comments, then cross-check the connector results.
+   - treat Notion as a primary source, not a summary source.
+   - record any missing workspace/teamspace/pages explicitly.
+7. Repo-local exported conversation files and notes:
    - `docs/codex-messages*`
    - issue, report, critique, and analysis files only when they are clearly about the same feature area
-6. Git history:
+8. Git history:
    - `git log --oneline --decorate -20`
    - inspect touched files for commits that appear to claim relevant work
 
@@ -105,6 +119,8 @@ Then continue by:
 - Build an evidence ledger before deep analysis:
   - total commits analyzed
   - total conversation files found
+  - total clipboard clips inspected
+  - total Notion pages/databases inspected
   - total repo documents inspected
   - churn-heavy files or recurring edit files
 - List selected conversation files, repo-local notes, and git ranges in chronological order.
@@ -119,11 +135,15 @@ Then continue by:
 For full forensic requests, run these checks before phase 1:
 - `git log --oneline --since="4 weeks ago" --all`
 - inventory conversation sources in `~/.codex/sessions/**/*.jsonl` and `~/.claude/projects/*/*.jsonl` linked to the repo cwd
+- inventory clipboard sources in CopyClip, VeloxClip, and any plaintext clipboard exports
+- inventory Notion pages and databases relevant to the current repo or workspace theme
 - list recent docs with explicit status words (`done`, `fixed`, `complete`) for verification
 
 ### Phase 1. Forensic Context Ingestion And Metadata Reporting
 
 - Open one real sample file from each source first and confirm the format is readable.
+- For clipboard, prove access on one sample row from each clipboard store before broad analysis.
+- For Notion, prove access on one real page and one real database/query result before broad analysis.
 - If a file is large, read it in stable sequential chunks from the original path and track progress.
 - If tooling blocks direct reading, report that blocker instead of pretending the source was covered.
 - Perform both:
@@ -256,6 +276,8 @@ Root-cause buckets to consider:
 - contradictory multi-agent work
 - implementation without repo validation
 - summary-trusting instead of source-reading
+- clipboard-history underutilization or over-reliance on a single source app
+- Notion workspace undercoverage or failure to check newly created pages
 - feature removed then reintroduced after confirmation
 - contradictory commit chains without repo-verified justification
 - regressions caused by later agent edits in same files
