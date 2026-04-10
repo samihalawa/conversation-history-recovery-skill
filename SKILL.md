@@ -96,7 +96,55 @@ Then continue by:
      - `~/Library/Containers/com.fiplab.clipboard/Data/Library/Application Support/CopyClip/copyclip.sqlite`
      - `~/Library/Application Support/VeloxClip/veloxclip.db`
      - plaintext or backup exports under `~/Library/Mobile Documents/com~apple~CloudDocs/git_backup/`
-   - inspect the SQLite schema first, then query `content`, `summary`, `sourceApp`, `createdAt`, `ZCONTENTS`, `ZDISPLAYNAME`, and `ZDATERECORDED`.
+
+   ### VERIFIED SCHEMAS (do not guess — use these directly, skip PRAGMA step):
+
+   **CopyClip (`copyclip.sqlite`)**
+   - Table: `ZCLIPPING`
+   - Confirmed columns: `Z_PK`, `Z_ENT`, `Z_OPT`, `ZDISPLAYNAMELENGTH`, `ZSOURCE`, `ZDATERECORDED`, `ZCONTENTS`, `ZDISPLAYNAME`, `ZTYPE`
+   - ⚠️ `ZSOURCEAPP` does NOT exist — using it causes `no such column` error. Do not query it.
+   - Fast query (replace KEYWORD with your search term):
+     ```sql
+     SELECT ZCONTENTS, ZDATERECORDED, ZDISPLAYNAME
+     FROM ZCLIPPING
+     WHERE (ZCONTENTS LIKE '%KEYWORD%' OR ZCONTENTS LIKE '%keyword%')
+       AND length(ZCONTENTS) > 200
+     ORDER BY ZDATERECORDED DESC
+     LIMIT 30;
+     ```
+   - Full CLI form:
+     ```bash
+     sqlite3 ~/Library/Containers/com.fiplab.clipboard/Data/Library/Application\ Support/CopyClip/copyclip.sqlite \
+       "SELECT ZCONTENTS, ZDATERECORDED, ZDISPLAYNAME FROM ZCLIPPING WHERE ZCONTENTS LIKE '%KEYWORD%' AND length(ZCONTENTS) > 200 ORDER BY ZDATERECORDED DESC LIMIT 30;"
+     ```
+
+   **VeloxClip (`veloxclip.db`)**
+   - Table: `clipboard_items` (also: `app_settings`)
+   - Confirmed columns: `id`, `createdAt`, `type`, `content`, `data`, `sourceApp`, `summary`, `tags`, `isSensitive`, `embedding`, `isFavorite`, `favoritedAt`
+   - Fast query:
+     ```sql
+     SELECT content, createdAt, sourceApp, summary
+     FROM clipboard_items
+     WHERE (content LIKE '%KEYWORD%' OR content LIKE '%keyword%')
+       AND length(content) > 200
+     ORDER BY createdAt DESC
+     LIMIT 30;
+     ```
+   - Full CLI form:
+     ```bash
+     sqlite3 ~/Library/Application\ Support/VeloxClip/veloxclip.db \
+       "SELECT content, createdAt, sourceApp, summary FROM clipboard_items WHERE content LIKE '%KEYWORD%' AND length(content) > 200 ORDER BY createdAt DESC LIMIT 30;"
+     ```
+
+   ### Fast extraction rules:
+   - Both databases often mirror the same clipboard content — query both in parallel, dedupe by content hash.
+   - Always filter `length(content) > 200` to skip noise (single words, URLs, short snippets).
+   - Use multiple OR conditions for keyword variants: `LIKE '%oulang%' OR LIKE '%OULANG%' OR LIKE '%欧浪%'`.
+   - For project-specific searches, include likely code identifiers too (e.g., component names, route patterns, env var names).
+   - Run both queries simultaneously via parallel shell processes — do not wait for one before starting the other.
+   - If content is truncated in output, re-query with `substr(ZCONTENTS, 1, 3000)` for long entries.
+   - `ZDATERECORDED` in CopyClip is a Core Data timestamp (seconds since 2001-01-01), not Unix epoch. To convert: `datetime(ZDATERECORDED + 978307200, 'unixepoch')`.
+   - `createdAt` in VeloxClip is standard ISO datetime string — directly human-readable.
    - search by source app, date window, and theme keywords; dedupe near-identical clips; rank by recency and theme density.
 6. Notion workspace and connected sources:
    - use the existing Notion connector first for `_search`, `_fetch`, comments, users, and teamspaces.
