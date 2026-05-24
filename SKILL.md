@@ -58,6 +58,7 @@ Then continue by:
 - Final conclusions must come from the original conversation text plus current repo evidence.
 - Separate user problems from agent-created problems. Both matter.
 - Track contradictions, abandoned work, unverified claims, and repeated re-requests explicitly.
+- Treat any agent move from one failed attempt to a permanent product gate as a high-risk regression candidate. Look for disabled features, hidden options, unavailable labels, removed rotation candidates, or `sendReady: false`-style state added after 403, 429, 500, timeout, empty-result, selector-miss, or failed-tool evidence.
 - When a request is typo-heavy or voice-to-text distorted, preserve the raw wording and also normalize it into plain language.
 - In `forensic-analysis mode`, never write code.
 - In `recovery-execution mode`, never start editing until the analytical backlog has been verified against the current repo.
@@ -271,6 +272,7 @@ Build a problem inventory with separate sections for:
   - contradiction between messages
   - misread instructions
   - repeated plan-without-execution loops
+  - transient external failures encoded as permanent gates or unavailable states without 3 distinct approaches and 2 source layers of proof
 - implicit problems
   - unreported failures
   - abandoned tasks
