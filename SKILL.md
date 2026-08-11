@@ -264,7 +264,7 @@ For every consequential historical conclusion, record an assertion fingerprint:
 `counterparty or actor + organization + opportunity, asset, requisition, or case + channel + native ID + event time + source + proof layer`
 
 - A shared company, domain, contact, or subject is never enough to merge distinct cases.
-- Classify the conclusion as `historical observation`, `current state`, or `current unknown`. A past event, draft, calendar artifact, CRM label, or prior dashboard cannot prove current state by itself.
+- Classify the conclusion as `historical observation`, `current state`, or `current unknown`. A past event, draft, stale calendar artifact, CRM label, or prior dashboard cannot prove current state by itself. A freshly read calendar record proves only its own scheduled or accepted meeting state, never attendance, completion, delivery, or outcome.
 - When later primary evidence reverses a conclusion, create a retraction record: original claim, reversal evidence, affected entities, and revised state.
 - Recompute and replace every dependent total, money/value statement, action ranking, and recommendation in the same report. Appending a correction while leaving the original dashboard operative is a failure.
 
