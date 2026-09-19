@@ -70,6 +70,18 @@ Use only relevant sources:
 - External records: use native provider state when the claim depends on current delivery, submission, deployment, or account state.
 - Memory: use as a locator, then verify drift-prone facts.
 
+## Where Agent Session History Actually Lives
+
+Resolve the storage surface before concluding that a history is unavailable. These locations are stable and often hold the decisive context:
+
+- Claude Code CLI: `~/.claude/projects/<slugified-cwd>/<session-uuid>.jsonl`, plus `~/.claude/history.jsonl`.
+- Claude Desktop and Cowork: not under `~/.claude`. Read `~/Library/Application Support/Claude/` (IndexedDB `https_claude.ai_0.indexeddb.leveldb` and `...indexeddb.blob`, `blob_storage`, `Local Storage`, `Session Storage`) and the logs under `~/Library/Logs/Claude/`. Cowork sessions are keyed `cowork:cse_<id>` and stream from `claude.ai/v1/code/sessions/<id>/events/stream`.
+- Codex: `~/.codex/sessions/**/rollout-*.jsonl`, with native task reads preferred over raw JSONL.
+
+Chromium-backed stores such as IndexedDB and Local Storage interleave UTF-16LE text with binary structure, so `strings` and plain `grep` return fragments or garbage. Decode ASCII and UTF-16LE runs together, then collapse each growing prefix chain to its longest member to recover final message text.
+
+Treat a local session store as a cache, not a transcript. Look for truncation or eviction markers, such as a `warm_heal_truncated` log line, and report the covered and missing sequence ranges instead of implying full coverage. Encrypted or signature-only payloads, including stored reasoning signatures, are not recoverable: say so plainly rather than inferring their content.
+
 Chronicle and Screenpipe are optional cross-app evidence sources, not universal prerequisites. Use them only for a specifically missing recent-work fact that conversation and repo sources cannot answer. Relevant paths may include `~/.codex/skills/chronicle/SKILL.md`, `~/.codex/memories_extensions/chronicle/`, `~/.codex/screenpipe-memories.md`, user-provided exports, and raw `~/.screenpipe/` artifacts when OCR, audio, meeting, or window evidence is actually needed.
 
 Clipboard, Notion, email, CRM, browser history, and provider logs are not mandatory fanout. Query them only when the current request names them or a decisive unresolved fact lives there.
@@ -81,6 +93,7 @@ Clipboard, Notion, email, CRM, browser history, and provider logs are not mandat
 - Do not stop at a recovered draft, saved form, API acknowledgement, or old checklist when a safe in-scope completion action remains.
 - Do not make the user choose among equally safe research routes; use the shortest route that can answer the question.
 - Do not repeat a source query after it is complete unless newer evidence could have changed it.
+- Do not disable, hide, remove, mark unavailable, or gate a source or capability after a single failed read. Try three distinct approaches across at least two source layers before treating it as unavailable, and record any temporary gate as `TEMP-GATE: YYYY-MM-DD - tried: ... - not tried: ... - removal condition: ...`.
 
 ## Coverage And Evidence
 
